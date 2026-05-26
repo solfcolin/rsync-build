@@ -24,7 +24,7 @@ jobs:
             mingw-w64-x86_64-zstd
             mingw-w64-x86_64-xxhash
             mingw-w64-x86_64-popt
-            wget
+            wget patch
 
       - name: Download & Extract source (skip testsuite/symlink)
         shell: msys2 {0}
@@ -34,17 +34,26 @@ jobs:
             --exclude='rsync-3.2.7/testsuite/*' \
             --no-same-permissions \
             --no-same-owner
-          cd rsync-3.2.7
 
-      - name: Configure fix socklen_t & Win32
+      - name: Patch source for Windows WinSock & uchar
+        shell: msys2 {0}
+        run: |
+          cd rsync-3.2.7
+          # 1. 替换 sys/socket.h 为 Windows winsock2.h
+          sed -i 's|#include <sys/socket.h>|#include <winsock2.h>\n#include <ws2tcpip.h>|g' rsync.h
+          # 2. 定义 uchar 类型
+          sed -i '1i typedef unsigned char uchar;' rsync.h
+          # 3. 关闭 MTIM 时间字段、绕过 socklen_t 检测
+          echo "ac_cv_type_socklen_t=yes" >> config.site
+          echo "ac_cv_header_sys_socket_h=no" >> config.site
+          echo "ac_cv_struct_st_mtim=no" >> config.site
+
+      - name: Configure build
         shell: msys2 {0}
         run: |
           cd rsync-3.2.7
           export CFLAGS="-static -static-libgcc -static-libstdc++ -DWIN32 -D_WIN32 -DNO_MTIM"
           export LDFLAGS="-static -static-libgcc -static-libstdc++ -lws2_32"
-          export ac_cv_type_socklen_t=yes
-          export ac_cv_header_sys_socket_h=yes
-
           ./configure \
             --host=x86_64-w64-mingw32 \
             --prefix=/mingw64 \
@@ -52,7 +61,8 @@ jobs:
             --enable-static \
             --disable-iconv \
             --disable-locale \
-            --disable-tests
+            --disable-tests \
+            --with-config-file=none
 
       - name: Compile & Install
         shell: msys2 {0}
