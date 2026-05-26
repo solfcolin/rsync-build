@@ -21,7 +21,7 @@ jobs:
     # 单行完整包列表，无换行语法问题
     - name: Install Cygwin packages
       run: |
-        cyg-get make,autoconf,automake,gcc-core,attr,libattr-devel,libiconv2-devel,python39,python39-pip,libzstd,libzstd-devel,liblz4,liblz4-devel,libssl,libssl-devel,libxxhash0,libxxhash-devel,popt,popt-devel
+        cyg-get make,autoconf,automake,gcc-core,attr,libattr-devel,libiconv2-devel,python39,python39-pip,libzstd-devel,liblz4-devel,libxxhash-devel,openssl-devel,popt,popt-devel
         # 写入PATH并立即刷新
         [Environment]::SetEnvironmentVariable('PATH', "C:\tools\cygwin\bin;$env:PATH", 'Machine')
         $env:PATH = "C:\tools\cygwin\bin;$env:PATH"
