@@ -1,5 +1,4 @@
-name: Build rsync 3.2.7 Static x64
-
+name: Build rsync 3.2.7 Cygwin x64
 on:
   workflow_dispatch:
   push:
@@ -12,84 +11,72 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup MSYS2 MINGW64
-        uses: msys2/setup-msys2@v2
+      # 安装 Cygwin 基础编译包（沿用你指定列表）
+      - name: Install Cygwin base packages
+        uses: cygwin/cygwin-install-action@v4
         with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            base-devel
-            mingw-w64-x86_64-toolchain
-            mingw-w64-x86_64-zlib
-            mingw-w64-x86_64-lz4
-            mingw-w64-x86_64-zstd
-            mingw-w64-x86_64-xxhash
-            mingw-w64-x86_64-popt
-            wget patch
+          packages: >
+            make,gawk,autoconf,automake,gcc-core,
+            python38,python38-pip,python38-commonmark,
+            attr,libattr-devel,
+            libzstd-devel,
+            liblz4-devel,
+            libssl-devel,
+            zlib-devel,popt-devel,xxhash-devel,wget
 
+      # 兜底：pip 补充 commonmark（彻底解决随机缺失问题）
+      - name: Install commonmark via pip
+        shell: cygwin
+        run: |
+          python3 -mpip install --user commonmark
+
+      # 下载并解压 rsync 3.2.7 源码
       - name: Download & Extract source
-        shell: msys2 {0}
+        shell: cygwin
         run: |
           wget https://www.samba.org/ftp/rsync/src/rsync-3.2.7.tar.gz
-          tar -zxf rsync-3.2.7.tar.gz \
-            --exclude='rsync-3.2.7/testsuite/*' \
-            --no-same-permissions \
-            --no-same-owner
+          tar -zxf rsync-3.2.7.tar.gz
+          cd rsync-3.2.7
 
-      - name: Patch source for Windows
-        shell: msys2 {0}
+      # 官方标准 configure（遵循 INSTALL.md）
+      - name: Configure
+        shell: cygwin
         run: |
           cd rsync-3.2.7
-          # 1. 适配 Windows Winsock
-          sed -i 's|#include <sys/socket.h>|#include <winsock2.h>\n#include <ws2tcpip.h>|g' rsync.h
-          # 2. 补充 uchar 定义
-          sed -i '1i typedef unsigned char uchar;' rsync.h
-          # 3. 注入配置缓存，绕过对不支持功能的检测
-          echo "ac_cv_type_socklen_t=yes" >> config.site
-          echo "ac_cv_header_sys_socket_h=no" >> config.site
-          echo "ac_cv_struct_st_mtim=no" >> config.site
-
-      - name: Configure build
-        shell: msys2 {0}
-        run: |
-          cd rsync-3.2.7
-          # 使用 -O3 优化并强制静态库链接
-          export CFLAGS="-O3 -static -static-libgcc -static-libstdc++ -DWIN32 -D_WIN32 -DNO_MTIM"
-          export LDFLAGS="-static -static-libgcc -static-libstdc++ -lws2_32"
           ./configure \
-            --host=x86_64-w64-mingw32 \
-            --prefix=/mingw64 \
-            --disable-shared \
+            --prefix=/usr/local \
             --enable-static \
-            --disable-iconv \
-            --disable-locale \
-            --disable-tests \
-            --with-config-file=none
+            --disable-shared \
+            --with-zlib \
+            --with-lz4 \
+            --with-zstd \
+            --with-xxhash \
+            --with-popt \
+            --disable-iconv
 
-      - name: Compile & Install
-        shell: msys2 {0}
+      # 编译 + 安装 + 瘦身
+      - name: Build & Install
+        shell: cygwin
         run: |
           cd rsync-3.2.7
           make -j$(nproc)
           make install
-          # 剥离符号表以减小体积
-          x86_64-w64-mingw32-strip /mingw64/bin/rsync.exe
+          strip /usr/local/bin/rsync.exe
 
-      - name: Verify Static Build
-        shell: msys2 {0}
-        run: |
-          # 检查是否残留非必要的动态库依赖
-          echo "Checking binary dependencies:"
-          objdump -p /mingw64/bin/rsync.exe | grep "DLL Name" || echo "No DLL dependencies found."
-
+      # 收集所有运行依赖
       - name: Collect artifacts
-        shell: msys2 {0}
+        shell: cygwin
         run: |
           mkdir -p ./output
-          cp /mingw64/bin/rsync.exe ./output/
+          cp /usr/local/bin/rsync.exe ./output/
+          cp /usr/bin/cygwin1.dll ./output/
+          cp /usr/bin/cygzstd-1.dll ./output/ 2>/dev/null || true
+          cp /usr/bin/cyglz4-1.dll ./output/ 2>/dev/null || true
+          cp /usr/bin/cygssl-3.dll ./output/ 2>/dev/null || true
 
+      # 上传编译产物
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rsync-3.2.7-x64-static
+          name: rsync-3.2.7-cygwin-x64
           path: ./output/
