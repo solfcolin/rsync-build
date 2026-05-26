@@ -1,5 +1,4 @@
 name: Build rsync 3.2.7 Static x64 (Single EXE)
-
 on:
   workflow_dispatch:
   push:
@@ -20,11 +19,11 @@ jobs:
           install: >-
             base-devel
             mingw-w64-x86_64-toolchain
-            mingw-w64-x86_64-zlib-static
-            mingw-w64-x86_64-lz4-static
-            mingw-w64-x86_64-zstd-static
-            mingw-w64-x86_64-xxhash-static
-            mingw-w64-x86_64-popt-static
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-lz4
+            mingw-w64-x86_64-zstd
+            mingw-w64-x86_64-xxhash
+            mingw-w64-x86_64-popt
             wget
 
       - name: Download rsync source
@@ -38,6 +37,7 @@ jobs:
         shell: msys2 {0}
         run: |
           cd rsync-3.2.7
+          # 全局静态链接参数
           export CFLAGS="-static -static-libgcc -static-libstdc++"
           export LDFLAGS="-static -static-libgcc -static-libstdc++"
           ./configure \
@@ -49,12 +49,13 @@ jobs:
             --disable-locale
           make -j$(nproc)
           make install
+          # 精简体积：剥离调试符号
+          strip /mingw64/bin/rsync.exe
 
       - name: Collect single exe
         shell: msys2 {0}
         run: |
           mkdir -p ./output
-          # 仅拷贝静态编译后的 rsync.exe，不再拷贝任何 DLL
           cp /mingw64/bin/rsync.exe ./output/
 
       - name: Upload artifact
