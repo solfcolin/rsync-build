@@ -50,9 +50,9 @@ jobs:
         bash -c "tar -zxf rsync-3.2.7.tar.gz --exclude='rsync-3.2.7/testsuite/*'"
         bash -c 'cd rsync-3.2.7'
 
-        bash -c './configure --with-rrsync --disable-lz4 --disable-openssl --disable-xxhash --disable-zstd'
-        bash -c 'make -j$(nproc)'
-        bash -c 'make install'
+        bash -c 'cd rsync-3.2.7 && ./configure --with-rrsync --disable-lz4 --disable-openssl --disable-xxhash --disable-zstd'
+        bash -c 'cd rsync-3.2.7 && make -j$(nproc)'
+        bash -c 'cd rsync-3.2.7 && make install'
         bash -c 'strip /usr/local/bin/rsync.exe'
         bash -c '/usr/local/bin/rsync --version'
 
