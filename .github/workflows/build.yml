@@ -16,12 +16,12 @@ jobs:
         line-ending: lf
 
     - name: Install Cygwin via Choco
-      run: choco install -y --no-progress cygwin cyg-get
+      run: choco install -y --no-progress cygwin cyg-get wget
 
     # 单行完整包列表，无换行语法问题
     - name: Install Cygwin packages
       run: |
-        cyg-get make,autoconf,automake,gcc-core,attr,libattr-devel,python39,python39-pip,libzstd-devel,liblz4-devel,libssl-devel,libxxhash0,libxxhash-devel,popt,popt-devel,wget
+        cyg-get make,autoconf,automake,gcc-core,attr,libattr-devel,python39,python39-pip,libzstd-devel,liblz4-devel,libssl-devel,libxxhash0,libxxhash-devel,popt,popt-devel
         # 写入PATH并立即刷新
         [Environment]::SetEnvironmentVariable('PATH', "C:\tools\cygwin\bin;$env:PATH", 'Machine')
         $env:PATH = "C:\tools\cygwin\bin;$env:PATH"
