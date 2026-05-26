@@ -48,7 +48,12 @@ jobs:
         wget https://www.samba.org/ftp/rsync/src/rsync-3.2.7.tar.gz
         tar -zxf rsync-3.2.7.tar.gz --exclude='rsync-3.2.7/testsuite/*'
         cd rsync-3.2.7
-        ./configure --build=x86_64-unknown-cygwin --host=x86_64-unknown-cygwin --target=x86_64-unknown-cygwin --with-rrsync --disable-lz4 --disable-openssl --disable-xxhash --disable-zstd
+        # 创建缓存文件，绕过 socklen_t 检测
+        cat > config.cache << 'EOF'
+        ac_cv_type_socklen_t=yes
+        rsync_cv_socklen_t_equiv=int
+        EOF
+        ./configure --with-rrsync --disable-lz4 --disable-openssl --disable-xxhash --disable-zstd
         make -j$(nproc)
         make install
         strip /usr/local/bin/rsync.exe
