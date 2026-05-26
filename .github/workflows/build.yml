@@ -1,7 +1,7 @@
-name: Build rsync 3.2.7 Windows x64
+name: Build rsync 3.2.7 Static x64 (Single EXE)
 
 on:
-  workflow_dispatch: # 手动触发编译
+  workflow_dispatch:
   push:
     branches: [ main ]
 
@@ -9,11 +9,10 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # 安装 MSYS2 (Windows 下编译 Unix 源码必备)
-      - name: Setup MSYS2
+      - name: Setup MSYS2 MINGW64
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -21,14 +20,13 @@ jobs:
           install: >-
             base-devel
             mingw-w64-x86_64-toolchain
-            mingw-w64-x86_64-zlib
-            mingw-w64-x86_64-lz4
-            mingw-w64-x86_64-zstd
-            mingw-w64-x86_64-xxhash
-            mingw-w64-x86_64-popt
+            mingw-w64-x86_64-zlib-static
+            mingw-w64-x86_64-lz4-static
+            mingw-w64-x86_64-zstd-static
+            mingw-w64-x86_64-xxhash-static
+            mingw-w64-x86_64-popt-static
             wget
 
-      # 下载官方 rsync 3.2.7 源码
       - name: Download rsync source
         shell: msys2 {0}
         run: |
@@ -36,37 +34,31 @@ jobs:
           tar -zxf rsync-3.2.7.tar.gz
           cd rsync-3.2.7
 
-      # 配置 + 编译 + 安装
-      - name: Configure & Build & Install
+      - name: Configure & Static Build
         shell: msys2 {0}
         run: |
           cd rsync-3.2.7
+          export CFLAGS="-static -static-libgcc -static-libstdc++"
+          export LDFLAGS="-static -static-libgcc -static-libstdc++"
           ./configure \
             --host=x86_64-w64-mingw32 \
             --prefix=/mingw64 \
+            --disable-shared \
+            --enable-static \
             --disable-iconv \
             --disable-locale
           make -j$(nproc)
           make install
 
-      # 收集可执行文件 + 所有依赖DLL
-      - name: Collect artifacts
+      - name: Collect single exe
         shell: msys2 {0}
         run: |
           mkdir -p ./output
+          # 仅拷贝静态编译后的 rsync.exe，不再拷贝任何 DLL
           cp /mingw64/bin/rsync.exe ./output/
-          # 拷贝运行必需依赖库
-          cp /mingw64/bin/libzstd.dll ./output/
-          cp /mingw64/bin/liblz4.dll ./output/
-          cp /mingw64/bin/libxxhash.dll ./output/
-          cp /mingw64/bin/libgcc_s_seh-1.dll ./output/
-          cp /mingw64/bin/libwinpthread-1.dll ./output/
-          cp /mingw64/bin/libstdc++-6.dll ./output/
-          cp /mingw64/bin/libpopt.dll ./output/
 
-      # 上传编译产物为 Release 附件
-      - name: Upload build artifacts
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rsync-3.2.7-x64
+          name: rsync-3.2.7-x64-static-single-exe
           path: ./output/
