@@ -12,69 +12,65 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        # 强制输出 Unix 换行，杜绝 \r 字符
+        line-ending: lf
 
-    # 安装 Cygwin
     - name: Install Cygwin via Choco
       run: choco install -y --no-progress cygwin cyg-get
 
-    # 安装编译依赖 + 追加 rsync 必需 popt
+    # 单行完整包列表，无换行语法问题
     - name: Install Cygwin packages
       run: |
-        cyg-get make autoconf automake gcc-core attr libattr-devel,python39 python39-pip libzstd-devel liblz4-devel libssl-devel,libxxhash0 libxxhash-devel popt popt-devel wget
-        echo "C:/tools/cygwin/bin" >> $Env:GITHUB_PATH
+        cyg-get make,autoconf,automake,gcc-core,attr,libattr-devel,python39,python39-pip,libzstd-devel,liblz4-devel,libssl-devel,libxxhash0,libxxhash-devel,popt,popt-devel,wget
+        # 写入PATH并立即刷新
+        [Environment]::SetEnvironmentVariable('PATH', "C:\tools\cygwin\bin;$env:PATH", 'Machine')
+        $env:PATH = "C:\tools\cygwin\bin;$env:PATH"
 
-    # 统一在 Cygwin Bash 内完成：pip、下载、解压、configure、make、install
-    - name: Build all in one bash session
+    # 纯Bash执行，内置PATH，确保wget可用
+    - name: Build & Compile
+      shell: bash
       run: |
-        bash -c "
-          # 安装 commonmark 兜底
-          python3 -m pip install --user commonmark
-          # 下载源码
-          wget https://www.samba.org/ftp/rsync/src/rsync-3.2.7.tar.gz
-          # 解压
-          tar -zxf rsync-3.2.7.tar.gz
-          # 进入源码目录（全程保持在此目录）
-          cd rsync-3.2.7
-          # 官方 configure
-          ./configure --with-rrsync
-          # 编译 + 安装
-          make -j$(nproc)
-          make install
-          # 剥离调试符号
-          strip /usr/local/bin/rsync.exe
-          # 版本校验
-          /usr/local/bin/rsync --version
-        "
+        python3 -m pip install --user commonmark --no-warn-script-location
+        wget https://www.samba.org/ftp/rsync/src/rsync-3.2.7.tar.gz
+        tar -zxf rsync-3.2.7.tar.gz
+        cd rsync-3.2.7
+        ./configure --with-rrsync
+        make -j$(nproc)
+        make install
+        strip /usr/local/bin/rsync.exe
+        /usr/local/bin/rsync --version
 
-    # 可选：测试用（保留你原有测试逻辑）
     - name: Make check
+      shell: bash
       run: |
-        bash -c "
-          cd rsync-3.2.7
-          RSYNC_EXPECT_SKIPPED=acls-default,acls-depth,acls,bare-do-open-symlink-race,chdir-symlink-race,chown,daemon-access-ip,daemon-chroot-acl,devices,dir-sgid,open-noatime,protected-regular,proxy-response-line-too-long,sender-flist-symlink-leak,simd-checksum,symlink-dirlink-basis make check
-        "
+        export PATH="/cygdrive/c/tools/cygwin/bin:$PATH"
+        cd rsync-3.2.7
+        RSYNC_EXPECT_SKIPPED=acls-default,acls-depth,acls,bare-do-open-symlink-race,chdir-symlink-race,chown,daemon-access-ip,daemon-chroot-acl,devices,dir-sgid,open-noatime,protected-regular,proxy-response-line-too-long,sender-flist-symlink-leak,simd-checksum,symlink-dirlink-basis make check
 
     - name: TCP daemon test
+      shell: bash
       run: |
-        bash -c "
-          cd rsync-3.2.7
-          ./runtests.py --rsync-bin=\`pwd\`/rsync.exe --use-tcp -j 8
-        "
+        export PATH="/cygdrive/c/tools/cygwin/bin:$PATH"
+        cd rsync-3.2.7
+        ./runtests.py --rsync-bin=`pwd`/rsync.exe --use-tcp -j 8
 
     - name: Rsync-ssl test
-      run: bash -c 'PATH="/usr/local/bin:$PATH" rsync-ssl --no-motd download.samba.org::rsyncftp/ || true'
+      shell: bash
+      run: |
+        export PATH="/cygdrive/c/tools/cygwin/bin:/usr/local/bin:$PATH"
+        rsync-ssl --no-motd download.samba.org::rsyncftp/ || true
 
-    # 收集产物（修正路径：Cygwin /usr/local/bin 对应真实路径）
     - name: Collect artifacts
       run: |
         mkdir -p ./output
-        copy "C:\tools\cygwin\usr\local\bin\rsync.exe" ./output\
-        copy "C:\tools\cygwin\usr\local\bin\rsync-ssl" ./output\
-        copy "C:\tools\cygwin\usr\local\bin\rrsync" ./output\
-        copy "C:\tools\cygwin\usr\local\man\man1\rsync.1" ./output\
-        copy "C:\tools\cygwin\usr\local\man\man1\rsync-ssl.1" ./output\
-        copy "C:\tools\cygwin\usr\local\man\man1\rrsync.1" ./output\
-        copy "C:\tools\cygwin\usr\local\man\man5\rsyncd.conf.5" ./output\
+        copy "C:\tools\cygwin\usr\local\bin\rsync.exe" ./output
+        copy "C:\tools\cygwin\usr\local\bin\rsync-ssl" ./output
+        copy "C:\tools\cygwin\usr\local\bin\rrsync" ./output
+        copy "C:\tools\cygwin\usr\local\man\man1\rsync.1" ./output
+        copy "C:\tools\cygwin\usr\local\man\man1\rsync-ssl.1" ./output
+        copy "C:\tools\cygwin\usr\local\man\man1\rrsync.1" ./output
+        copy "C:\tools\cygwin\usr\local\man\man5\rsyncd.conf.5" ./output
+        copy "C:\tools\cygwin\bin\cygwin1.dll" ./output
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
