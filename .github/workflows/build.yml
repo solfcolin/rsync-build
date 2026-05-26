@@ -39,7 +39,7 @@ jobs:
         Test-Path "C:\tools\cygwin\usr\include\openssl\md4.h"
         Test-Path "C:\tools\cygwin\usr\include\zstd.h"
         Test-Path "C:\tools\cygwin\usr\include\lz4.h"
-
+        
     # 纯Bash执行，内置PATH，确保wget可用
     - name: Build & Compile
       shell: bash
@@ -48,7 +48,7 @@ jobs:
         wget https://www.samba.org/ftp/rsync/src/rsync-3.2.7.tar.gz
         tar -zxf rsync-3.2.7.tar.gz --exclude='rsync-3.2.7/testsuite/*'
         cd rsync-3.2.7
-        ./configure --with-rrsync
+        ./configure --with-rrsync --disable-lz4 --disable-openssl
         make -j$(nproc)
         make install
         strip /usr/local/bin/rsync.exe
