@@ -22,7 +22,7 @@ jobs:
     - name: Install Cygwin packages
       run: |
         # 第一组：基础编译工具和 rsync 核心依赖（依照官方文档）
-        cyg-get make,gawk,autoconf,automake,gcc-core,python39,python39-pip
+        cyg-get make,gawk,autoconf,automake,gcc-core,python38,python38-pip
         # 第二组：ACL 和 xattr 支持
         cyg-get attr,libattr-devel
         # 第三组：压缩与校验库（官方文档明确列出的）
@@ -48,7 +48,7 @@ jobs:
         wget https://www.samba.org/ftp/rsync/src/rsync-3.2.7.tar.gz
         tar -zxf rsync-3.2.7.tar.gz --exclude='rsync-3.2.7/testsuite/*'
         cd rsync-3.2.7
-        ./configure --with-rrsync --disable-lz4 --disable-openssl
+        ./configure --with-rrsync --disable-lz4 --disable-openssl --disable-xxhash --disable-zstd
         make -j$(nproc)
         make install
         strip /usr/local/bin/rsync.exe
