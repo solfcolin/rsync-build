@@ -24,7 +24,6 @@ jobs:
             mingw-w64-x86_64-zstd
             mingw-w64-x86_64-xxhash
             mingw-w64-x86_64-popt
-            mingw-w64-x86_64-ws2_32
             wget
 
       - name: Download & Extract source (skip testsuite/symlink)
@@ -37,12 +36,11 @@ jobs:
             --no-same-owner
           cd rsync-3.2.7
 
-      - name: Configure with Win32 patch for socklen_t
+      - name: Configure fix socklen_t & Win32
         shell: msys2 {0}
         run: |
           cd rsync-3.2.7
-          # 注入编译参数：Windows 网络头文件 + 手动定义 socklen_t
-          export CFLAGS="-static -static-libgcc -static-libstdc++ -DWIN32 -D_WIN32"
+          export CFLAGS="-static -static-libgcc -static-libstdc++ -DWIN32 -D_WIN32 -DNO_MTIM"
           export LDFLAGS="-static -static-libgcc -static-libstdc++ -lws2_32"
           export ac_cv_type_socklen_t=yes
           export ac_cv_header_sys_socket_h=yes
