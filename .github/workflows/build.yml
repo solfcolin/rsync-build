@@ -1,4 +1,4 @@
-name: Build rsync 3.2.7 Static x64 (Single EXE)
+name: Build rsync 3.2.7 Static x64
 on:
   workflow_dispatch:
   push:
@@ -24,26 +24,29 @@ jobs:
             mingw-w64-x86_64-zstd
             mingw-w64-x86_64-xxhash
             mingw-w64-x86_64-popt
+            mingw-w64-x86_64-ws2_32
             wget
 
-      - name: Download rsync source & Extract (skip symlink)
+      - name: Download & Extract source (skip testsuite/symlink)
         shell: msys2 {0}
         run: |
           wget https://www.samba.org/ftp/rsync/src/rsync-3.2.7.tar.gz
-          # --no-same-permissions --no-same-owner 适配Windows
-          # --exclude='*.test' 直接过滤测试目录（彻底避开软链接）
           tar -zxf rsync-3.2.7.tar.gz \
             --exclude='rsync-3.2.7/testsuite/*' \
             --no-same-permissions \
             --no-same-owner
           cd rsync-3.2.7
 
-      - name: Configure & Static Build
+      - name: Configure with Win32 patch for socklen_t
         shell: msys2 {0}
         run: |
           cd rsync-3.2.7
-          export CFLAGS="-static -static-libgcc -static-libstdc++"
-          export LDFLAGS="-static -static-libgcc -static-libstdc++"
+          # 注入编译参数：Windows 网络头文件 + 手动定义 socklen_t
+          export CFLAGS="-static -static-libgcc -static-libstdc++ -DWIN32 -D_WIN32"
+          export LDFLAGS="-static -static-libgcc -static-libstdc++ -lws2_32"
+          export ac_cv_type_socklen_t=yes
+          export ac_cv_header_sys_socket_h=yes
+
           ./configure \
             --host=x86_64-w64-mingw32 \
             --prefix=/mingw64 \
@@ -52,16 +55,20 @@ jobs:
             --disable-iconv \
             --disable-locale \
             --disable-tests
+
+      - name: Compile & Install
+        shell: msys2 {0}
+        run: |
+          cd rsync-3.2.7
           make -j$(nproc)
           make install
           strip /mingw64/bin/rsync.exe
 
-      - name: Collect single exe
+      - name: Collect artifacts
         shell: msys2 {0}
         run: |
           mkdir -p ./output
           cp /mingw64/bin/rsync.exe ./output/
-          # 兜底：如果仍依赖 pthread，一并拷贝
           cp /mingw64/bin/libwinpthread-1.dll ./output/ 2>/dev/null || true
 
       - name: Upload artifact
