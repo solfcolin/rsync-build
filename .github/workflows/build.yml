@@ -1,4 +1,5 @@
 name: Build rsync 3.2.7 Static x64
+
 on:
   workflow_dispatch:
   push:
@@ -26,7 +27,7 @@ jobs:
             mingw-w64-x86_64-popt
             wget patch
 
-      - name: Download & Extract source (skip testsuite/symlink)
+      - name: Download & Extract source
         shell: msys2 {0}
         run: |
           wget https://www.samba.org/ftp/rsync/src/rsync-3.2.7.tar.gz
@@ -35,15 +36,15 @@ jobs:
             --no-same-permissions \
             --no-same-owner
 
-      - name: Patch source for Windows WinSock & uchar
+      - name: Patch source for Windows
         shell: msys2 {0}
         run: |
           cd rsync-3.2.7
-          # 1. 替换 sys/socket.h 为 Windows winsock2.h
+          # 1. 适配 Windows Winsock
           sed -i 's|#include <sys/socket.h>|#include <winsock2.h>\n#include <ws2tcpip.h>|g' rsync.h
-          # 2. 定义 uchar 类型
+          # 2. 补充 uchar 定义
           sed -i '1i typedef unsigned char uchar;' rsync.h
-          # 3. 关闭 MTIM 时间字段、绕过 socklen_t 检测
+          # 3. 注入配置缓存，绕过对不支持功能的检测
           echo "ac_cv_type_socklen_t=yes" >> config.site
           echo "ac_cv_header_sys_socket_h=no" >> config.site
           echo "ac_cv_struct_st_mtim=no" >> config.site
@@ -52,7 +53,8 @@ jobs:
         shell: msys2 {0}
         run: |
           cd rsync-3.2.7
-          export CFLAGS="-static -static-libgcc -static-libstdc++ -DWIN32 -D_WIN32 -DNO_MTIM"
+          # 使用 -O3 优化并强制静态库链接
+          export CFLAGS="-O3 -static -static-libgcc -static-libstdc++ -DWIN32 -D_WIN32 -DNO_MTIM"
           export LDFLAGS="-static -static-libgcc -static-libstdc++ -lws2_32"
           ./configure \
             --host=x86_64-w64-mingw32 \
@@ -70,14 +72,21 @@ jobs:
           cd rsync-3.2.7
           make -j$(nproc)
           make install
-          strip /mingw64/bin/rsync.exe
+          # 剥离符号表以减小体积
+          x86_64-w64-mingw32-strip /mingw64/bin/rsync.exe
+
+      - name: Verify Static Build
+        shell: msys2 {0}
+        run: |
+          # 检查是否残留非必要的动态库依赖
+          echo "Checking binary dependencies:"
+          objdump -p /mingw64/bin/rsync.exe | grep "DLL Name" || echo "No DLL dependencies found."
 
       - name: Collect artifacts
         shell: msys2 {0}
         run: |
           mkdir -p ./output
           cp /mingw64/bin/rsync.exe ./output/
-          cp /mingw64/bin/libwinpthread-1.dll ./output/ 2>/dev/null || true
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
