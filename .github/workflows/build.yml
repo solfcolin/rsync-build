@@ -12,65 +12,95 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-        # 强制输出 Unix 换行，杜绝 \r 字符
         line-ending: lf
 
+    # 缓存 Cygwin 整个安装目录
+    - name: Cache entire Cygwin
+      uses: actions/cache@v4
+      id: cache-cygwin
+      with:
+        path: C:\tools\cygwin
+        key: cygwin-full-${{ runner.os }}-${{ hashFiles('cygwin-packages-list.txt') }}
+        restore-keys: |
+          cygwin-full-${{ runner.os }}-
+
+    # 缓存 Python 包（commonmark 等）
+    - name: Cache Python packages
+      uses: actions/cache@v4
+      id: cache-python
+      with:
+        path: ~/.local  # Cygwin 下 pip --user 安装的包位置
+        key: python-packages-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          python-packages-${{ runner.os }}-
+
     - name: Install Cygwin via Choco
+      if: steps.cache-cygwin.outputs.cache-hit != 'true'
       run: choco install -y --no-progress cygwin cyg-get wget
 
-    # 单行完整包列表，无换行语法问题
     - name: Install Cygwin packages
+      if: steps.cache-cygwin.outputs.cache-hit != 'true'
       run: |
-        # 第一组：基础编译工具和 rsync 核心依赖（依照官方文档）
-        cyg-get make gawk autoconf automake gcc-core python38 python38-pip
-        # 第二组：ACL 和 xattr 支持
-        cyg-get attr libattr-devel
-        # 第三组：压缩与校验库（官方文档明确列出的）
-        cyg-get libzstd-devel liblz4-devel libssl-devel
-        cyg-get libxxhash0 libxxhash-devel
-        # 注意：Cygwin 官方仓库可能没有 libxxhash-devel，如需 xxhash 支持，需后续从源码编译（可选）
+        $packages = @(
+          "make", "gawk", "autoconf", "automake", "gcc-core", "python39", "python39-pip",
+          "attr", "libattr-devel",
+          "libzstd-devel", "liblz4-devel", "libssl-devel",
+          "libxxhash0", "libxxhash-devel"
+        )
+        $packages -join "," | Out-File -FilePath cygwin-packages-list.txt -Encoding ascii
         
-        echo "C:/tools/cygwin/bin" >>$Env:GITHUB_PATH
+        C:\tools\cygwin\cygwinsetup.exe -qgnNdO `
+          -R C:/tools/cygwin `
+          -l C:/tools/cygwin/package `
+          -s http://mirrors.kernel.org/sourceware/cygwin/ `
+          -P make,gawk,autoconf,automake,gcc-core,python39,python39-pip,attr,libattr-devel,libzstd-devel,liblz4-devel,libssl-devel,libxxhash0,libxxhash-devel
         
-        # 验证关键头文件是否存在（调试用）
-        Write-Host "Checking for ssl headers..."
-        Test-Path "C:\tools\cygwin\usr\include\openssl\md4.h"
-        Test-Path "C:\tools\cygwin\usr\include\zstd.h"
-        Test-Path "C:\tools\cygwin\usr\include\lz4.h"
-        
-    # 纯Bash执行，内置PATH，确保wget可用
+        echo "C:/tools/cygwin/bin" >> $Env:GITHUB_PATH
+
+    - name: Add Cygwin to PATH (always)
+      if: steps.cache-cygwin.outputs.cache-hit == 'true'
+      run: echo "C:/tools/cygwin/bin" >> $Env:GITHUB_PATH
+
+    # 安装 Python 包（仅当缓存未命中时）
+    - name: Install commonmark
+      if: steps.cache-python.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        python3 -m pip install --user commonmark
+
+    # 确保 PATH 包含 ~/.local/bin（Python 用户安装目录）
+    - name: Add Python user bin to PATH
+      shell: bash
+      run: |
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+
     - name: Build & Compile
       shell: bash
       run: |
-        bash -c 'python3 -m pip install --user commonmark'
-        bash -c 'wget https://www.samba.org/ftp/rsync/src/rsync-3.2.7.tar.gz'
-        bash -c "tar -zxf rsync-3.2.7.tar.gz --exclude='rsync-3.2.7/testsuite/*'"
-        bash -c 'cd rsync-3.2.7'
-
-        bash -c 'cd rsync-3.2.7 && ./configure --with-rrsync --disable-lz4 --disable-openssl --disable-xxhash --disable-zstd'
-        bash -c 'cd rsync-3.2.7 && make -j$(nproc)'
-        bash -c 'cd rsync-3.2.7 && make install'
-        bash -c 'strip /usr/local/bin/rsync.exe'
-        bash -c '/usr/local/bin/rsync --version'
+        wget https://www.samba.org/ftp/rsync/src/rsync-3.2.7.tar.gz
+        tar -zxf rsync-3.2.7.tar.gz
+        cd rsync-3.2.7
+        ./configure --with-rrsync
+        make -j$(nproc)
+        make install
+        strip /usr/local/bin/rsync.exe
+        /usr/local/bin/rsync --version
 
     - name: Make check
       shell: bash
       run: |
-        export PATH="/cygdrive/c/tools/cygwin/bin:$PATH"
         cd rsync-3.2.7
-        RSYNC_EXPECT_SKIPPED=acls-default,acls-depth,acls,bare-do-open-symlink-race,chdir-symlink-race,chown,daemon-access-ip,daemon-chroot-acl,devices,dir-sgid,open-noatime,protected-regular,proxy-response-line-too-long,sender-flist-symlink-leak,simd-checksum,symlink-dirlink-basis make check
+        RSYNC_EXPECT_SKIPPED="acls-default,acls-depth,acls,bare-do-open-symlink-race,chdir-symlink-race,chown,daemon-access-ip,daemon-chroot-acl,devices,dir-sgid,open-noatime,protected-regular,proxy-response-line-too-long,sender-flist-symlink-leak,simd-checksum,symlink-dirlink-basis" make check
 
     - name: TCP daemon test
       shell: bash
       run: |
-        export PATH="/cygdrive/c/tools/cygwin/bin:$PATH"
         cd rsync-3.2.7
-        ./runtests.py --rsync-bin=`pwd`/rsync.exe --use-tcp -j 8
+        ./runtests.py --rsync-bin=$(pwd)/rsync.exe --use-tcp -j 8
 
     - name: Rsync-ssl test
       shell: bash
       run: |
-        export PATH="/cygdrive/c/tools/cygwin/bin:/usr/local/bin:$PATH"
         rsync-ssl --no-motd download.samba.org::rsyncftp/ || true
 
     - name: Collect artifacts
