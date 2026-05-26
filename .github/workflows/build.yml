@@ -1,19 +1,11 @@
-name: Test rsync on Cygwin
-
+name: Build rsync 3.2.7 Cygwin x64
 on:
+  workflow_dispatch:
   push:
-    branches: [ master ]
-    paths-ignore:
-      - '.github/workflows/*.yml'
-      - '!.github/workflows/cygwin-build.yml'
-  pull_request:
-    branches: [ master ]
-    paths-ignore:
-      - '.github/workflows/*.yml'
-      - '!.github/workflows/cygwin-build.yml'
+    branches: [ main ]
 
 jobs:
-  test:
+  build:
     runs-on: windows-2022
     name: Test rsync on Cygwin
     steps:
