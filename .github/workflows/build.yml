@@ -27,18 +27,17 @@ jobs:
     - name: Build & Compile
       shell: bash
       run: |
+        set -o igncr 2>/dev/null || true
         bash -c 'python3 -mpip install --user commonmark'
         bash -c 'wget https://www.samba.org/ftp/rsync/src/rsync-3.2.7.tar.gz' 
         # 排除测试目录，规避软链接报错
         bash -c 'tar -zxf rsync-3.2.7.tar.gz --exclude="rsync-3.2.7/testsuite/*"'
-        
         # 禁用检测失败的组件，直接完成配置
         bash -c 'cd rsync-3.2.7 && ./configure --with-rrsync'
         bash -c 'cd rsync-3.2.7 && make -j$(nproc)'
         bash -c 'cd rsync-3.2.7 && make install'
         bash -c 'cd rsync-3.2.7 && strip /usr/local/bin/rsync.exe'
         bash -c 'cd rsync-3.2.7 && /usr/local/bin/rsync --version'
-
     - name: Collect artifacts
       run: |
         mkdir -p ./output
