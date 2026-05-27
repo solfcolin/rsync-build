@@ -15,7 +15,7 @@ jobs:
         line-ending: lf
 
     - name: Install Cygwin via Choco
-      run: choco install -y --no-progress cygwin cyg-get
+      run: choco install -y --no-progress cygwin cyg-get wget
 
     # 批量安装已有依赖包
     - name: Install Cygwin packages
@@ -24,11 +24,10 @@ jobs:
         cyg-get popt,popt-devel,zstd,libzstd libzstd-devel lz4,liblz4 liblz4-devel
         cyg-get openssl,libssl-devel,xxhash,libxxhash0,libxxhash-devel 
         echo "C:/tools/cygwin/bin" >>$Env:GITHUB_PATH
-
     - name: Build & Compile
       shell: bash
       run: |
-        bash -c 'python3 -m pip install --user commonmark'
+        bash -c 'python3 -mpip install --user commonmark'
         bash -c 'wget https://www.samba.org/ftp/rsync/src/rsync-3.2.7.tar.gz' 
         # 排除测试目录，规避软链接报错
         bash -c 'tar -zxf rsync-3.2.7.tar.gz --exclude="rsync-3.2.7/testsuite/*"'
