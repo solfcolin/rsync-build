@@ -1,0 +1,29 @@
+name: Windows Runner SSH Deploy
+on:
+  # 触发规则：推送代码 / 手动触发
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  ssh_task:
+    runs-on: windows-2022  # 固定 Windows 2022 运行器
+    steps:
+      - name: SSH 连接 Windows Server Core 执行命令
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.WIN_SSH_HOST }}
+          username: ${{ secrets.WIN_SSH_USER }}
+          key: ${{ secrets.WIN_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.WIN_SSH_PORT }}
+          # 跳过主机密钥检查（避免首次连接交互阻塞）
+          hostkey-check: false
+          # 远程执行 Windows 命令（CMD / PowerShell 都支持）
+          script: |
+            echo === 执行远程命令 ===
+            whoami
+            ipconfig
+            # 自定义你的业务命令，示例：
+            # cd C:\your-app
+            # git pull
+            # Restart-Service docker
